@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Хранилище — кликер</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --bg-0:#0b0e14;
+    --bg-1:#12161f;
+    --gold:#e8b923;
+    --gold-dim:#8a6d1e;
+    --copper:#c9793f;
+    --violet:#9b7ce8;
+    --violet-dim:#5c4a8a;
+    --ink:#e9e3d0;
+    --ink-dim:#8a8f9c;
+    --line:#232936;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg-0);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    overflow-x:hidden;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  body{
+    background-image:
+      radial-gradient(ellipse at 50% -10%, rgba(232,185,35,0.08), transparent 60%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+  }
+
+  .wrap{
+    max-width:920px;
+    margin:0 auto;
+    padding:20px 16px 60px;
+    display:flex;
+    flex-direction:column;
+    gap:22px;
+  }
+
+  header{
+    text-align:center;
+    padding-top:8px;
+  }
+
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.28em;
+    text-transform:uppercase;
+    color:var(--gold-dim);
+    margin-bottom:6px;
+  }
+
+  h1{
+    font-family:'Cinzel',serif;
+    font-weight:700;
+    font-size:clamp(26px,5vw,38px);
+    margin:0;
+    color:var(--gold);
+    letter-spacing:0.02em;
+    text-shadow:0 0 24px rgba(232,185,35,0.25);
+  }
+
+  .ledger-line{
+    width:100%;
+    max-width:520px;
+    height:1px;
+    margin:16px auto 0;
+    background:linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+  }
+
+  .stats{
+    display:flex;
+    justify-content:center;
+    gap:22px;
+    flex-wrap:wrap;
+    margin-top:16px;
+    font-family:'JetBrains Mono',monospace;
+  }
+
+  .stat{
+    text-align:center;
+  }
+
+  .stat .num{
+    font-size:20px;
+    font-weight:700;
+    color:var(--ink);
+  }
+
+  .stat.violet .num{ color:var(--violet); }
+
+  .stat .lbl{
+    font-size:10px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin-top:2px;
+  }
+
+  .balance{
+    text-align:center;
+    margin-top:2px;
+  }
+
+  .balance .amount{
+    font-family:'JetBrains Mono',monospace;
+    font-size:clamp(40px,10vw,64px);
+    font-weight:700;
+    color:var(--gold);
+    letter-spacing:0.01em;
+    line-height:1;
+  }
+
+  .balance .currency{
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px;
+    letter-spacing:0.2em;
+    color:var(--ink-dim);
+    text-transform:uppercase;
+  }
+
+  .coin-stage{
+    position:relative;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    padding:18px 0 6px;
+    user-select:none;
+  }
+
+  #coin{
+    position:relative;
+    width:180px;
+    height:180px;
+    border-radius:50%;
+    border:none;
+    cursor:pointer;
+    background:
+      radial-gradient(circle at 35% 30%, #fbe28a, #e8b923 45%, #b3860f 78%, #7a5a08 100%);
+    box-shadow:
+      0 0 0 6px #0b0e14,
+      0 0 0 8px var(--gold-dim),
+      0 12px 30px rgba(0,0,0,0.55),
+      inset 0 4px 10px rgba(255,255,255,0.35),
+      inset 0 -10px 20px rgba(0,0,0,0.35);
+    transition: transform 0.06s ease;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  #coin:active{ transform:scale(0.93); }
+
+  #coin::before{
+    content:'₡';
+    font-family:'Cinzel',serif;
+    font-weight:700;
+    font-size:64px;
+    color:#5c4108;
+    text-shadow:0 1px 0 rgba(255,255,255,0.25);
+  }
+
+  .coin-stage.pop #coin{ animation:pop 0.14s ease; }
+  @keyframes pop{ 50%{ transform:scale(1.06); } }
+
+  .float{
+    position:absolute;
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    color:var(--gold);
+    pointer-events:none;
+    animation:rise 0.9s ease-out forwards;
+    font-size:15px;
+    text-shadow:0 0 8px rgba(232,185,35,0.5);
+  }
+
+  @keyframes rise{
+    0%{ transform:translate(-50%,-50%) translateY(0); opacity:1; }
+    100%{ transform:translate(-50%,-50%) translateY(-90px); opacity:0; }
+  }
+
+  .per-click-hint{
+    text-align:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    color:var(--ink-dim);
+    margin-top:6px;
+  }
+
+  .save-hint{
+    text-align:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    color:var(--gold-dim);
+    margin-top:-8px;
+    min-height:14px;
+    transition:opacity 0.4s ease;
+  }
+
+  section.panel{
+    background:var(--bg-1);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:18px 16px 6px;
+  }
+
+  section.panel.prestige{
+    border-color:var(--violet-dim);
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(155,124,232,0.09), transparent 70%),
+      var(--bg-1);
+  }
+
+  .panel-title{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:1px solid var(--line);
+    padding-bottom:10px;
+    margin-bottom:12px;
+  }
+
+  .panel-title h2{
+    font-family:'Cinzel',serif;
+    font-size:16px;
+    letter-spacing:0.06em;
+    color:var(--gold);
+    margin:0;
+    text-transform:uppercase;
+  }
+
+  .prestige .panel-title h2{ color:var(--violet); }
+
+  .panel-title span{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--ink-dim);
+  }
+
+  .upgrades{
+    display:flex;
+    flex-direction:column;
+  }
+
+  .upgrade{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:12px 4px;
+    border-bottom:1px solid var(--line);
+  }
+
+  .upgrade:last-child{ border-bottom:none; }
+
+  .upgrade .icon{
+    width:40px;
+    height:40px;
+    flex:none;
+    border-radius:4px;
+    background:var(--bg-0);
+    border:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:18px;
+  }
+
+  .upgrade .info{
+    flex:1;
+    min-width:0;
+  }
+
+  .upgrade .name{
+    font-size:14px;
+    font-weight:600;
+    color:var(--ink);
+  }
+
+  .upgrade .desc{
+    font-size:11.5px;
+    color:var(--ink-dim);
+    margin-top:1px;
+  }
+
+  .upgrade .level{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--copper);
+    margin-top:3px;
+  }
+
+  .upgrade button{
+    flex:none;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    font-weight:700;
+    background:transparent;
+    border:1px solid var(--gold-dim);
+    color:var(--gold);
+    padding:9px 12px;
+    border-radius:3px;
+    cursor:pointer;
+    min-width:96px;
+    text-align:center;
+    transition: all 0.12s ease;
+  }
+
+  .upgrade button:disabled{
+    color:var(--ink-dim);
+    border-color:var(--line);
+    cursor:not-allowed;
+  }
+
+  .upgrade button:not(:disabled):hover{
+    background:rgba(232,185,35,0.1);
+  }
+
+  .upgrade button:not(:disabled):active{
+    transform:scale(0.96);
+  }
+
+  .upgrade.maxed button{
+    border-color:var(--violet-dim);
+    color:var(--violet);
+  }
+
+  .prestige-body{
+    padding:4px 4px 16px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+
+  .prestige-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    color:var(--ink-dim);
+  }
+
+  .prestige-row b{
+    color:var(--violet);
+    font-size:14px;
+  }
+
+  .prestige-bar{
+    width:100%;
+    height:8px;
+    border-radius:4px;
+    background:var(--bg-0);
+    border:1px solid var(--line);
+    overflow:hidden;
+  }
+
+  .prestige-bar-fill{
+    height:100%;
+    background:linear-gradient(90deg, var(--violet-dim), var(--violet));
+    width:0%;
+    transition:width 0.3s ease;
+  }
+
+  #rebirthBtn{
+    font-family:'Cinzel',serif;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:0.04em;
+    background:linear-gradient(180deg, rgba(155,124,232,0.18), rgba(155,124,232,0.05));
+    border:1px solid var(--violet);
+    color:var(--violet);
+    padding:14px 12px;
+    border-radius:4px;
+    cursor:pointer;
+    text-transform:uppercase;
+    transition:all 0.15s ease;
+  }
+
+  #rebirthBtn:disabled{
+    border-color:var(--line);
+    color:var(--ink-dim);
+    background:none;
+    cursor:not-allowed;
+  }
+
+  #rebirthBtn:not(:disabled):hover{
+    background:rgba(155,124,232,0.22);
+  }
+
+  #rebirthBtn:not(:disabled):active{
+    transform:scale(0.98);
+  }
+
+  .prestige-note{
+    font-size:11px;
+    color:var(--ink-dim);
+    line-height:1.5;
+  }
+
+  footer{
+    text-align:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    color:var(--ink-dim);
+    letter-spacing:0.08em;
+    margin-top:6px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .float{ animation:none; opacity:0; }
+    .coin-stage.pop #coin{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Хранитель монет</div>
+    <h1>Хранилище</h1>
+    <div class="ledger-line"></div>
+  </header>
+
+  <div class="balance">
+    <div class="amount" id="balance">0</div>
+    <div class="currency">золотых</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="num" id="perClick">1</div>
+      <div class="lbl">за клик</div>
+    </div>
+    <div class="stat">
+      <div class="num" id="perSecond">0</div>
+      <div class="lbl">в секунду</div>
+    </div>
+    <div class="stat">
+      <div class="num" id="totalEarned">0</div>
+      <div class="lbl">всего добыто</div>
+    </div>
+    <div class="stat violet">
+      <div class="num" id="prestigeCount">0</div>
+      <div class="lbl">перерождений</div>
+    </div>
+  </div>
+
+  <div class="coin-stage" id="coinStage">
+    <button id="coin" aria-label="Нажать на монету"></button>
+  </div>
+  <div class="per-click-hint">Нажимай на монету, чтобы добывать золото</div>
+  <div class="save-hint" id="saveHint"></div>
+
+  <section class="panel">
+    <div class="panel-title">
+      <h2>Улучшения силы клика</h2>
+      <span>увеличивают доход за клик</span>
+    </div>
+    <div class="upgrades" id="clickUpgrades"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-title">
+      <h2>Наёмные добытчики</h2>
+      <span>приносят золото каждую секунду</span>
+    </div>
+    <div class="upgrades" id="passiveUpgrades"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-title">
+      <h2>Артефакты силы</h2>
+      <span>множители, редкие и дорогие</span>
+    </div>
+    <div class="upgrades" id="multiplierUpgrades"></div>
+  </section>
+
+  <section class="panel prestige">
+    <div class="panel-title">
+      <h2>Перерождение</h2>
+      <span>сбросить прогресс ради вечной силы</span>
+    </div>
+    <div class="prestige-body">
+      <div class="prestige-row">
+        <span>Текущий множитель</span>
+        <b id="prestigeMult">×1.00</b>
+      </div>
+      <div class="prestige-row">
+        <span>Следующее перерождение</span>
+        <span id="rebirthReq">нужно 100K</span>
+      </div>
+      <div class="prestige-bar"><div class="prestige-bar-fill" id="prestigeBar"></div></div>
+      <button id="rebirthBtn" disabled>Переродиться</button>
+      <div class="prestige-note">Перерождение обнуляет золото и все улучшения, кроме артефактов силы, но каждое перерождение навсегда даёт +10% к доходу за клик и в секунду.</div>
+    </div>
+  </section>
+
+  <footer id="saveStatus">прогресс сохраняется автоматически</footer>
+
+</div>
+
+<script>
+(function(){
+
+  // ---------- Telegram Mini App bootstrap ----------
+  const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+  if(tg){
+    try{
+      tg.ready();
+      tg.expand();
+      if(tg.setHeaderColor) tg.setHeaderColor('#0b0e14');
+      if(tg.setBackgroundColor) tg.setBackgroundColor('#0b0e14');
+    }catch(e){}
+  }
+
+  const SAVE_KEY = 'vault_clicker_save_v2';
+
+  const state = {
+    balance: 0,
+    totalEarned: 0,
+    perClick: 1,
+    perSecond: 0,
+    prestige: 0,
+  };
+
+  // Улучшения силы клика
+  const clickUpgrades = [
+    { id:'grip',    name:'Крепкая рука',        desc:'+1 золото за клик',    icon:'✊', baseCost:15,      costMul:1.15, add:1,   level:0 },
+    { id:'ring',    name:'Заговорённый перстень', desc:'+3 золото за клик',   icon:'💍', baseCost:120,     costMul:1.16, add:3,   level:0 },
+    { id:'glove',   name:'Перчатка Мидаса',     desc:'+8 золото за клик',    icon:'🧤', baseCost:900,     costMul:1.17, add:8,   level:0 },
+    { id:'relic',   name:'Древняя реликвия',    desc:'+25 золото за клик',   icon:'🔱', baseCost:6500,    costMul:1.18, add:25,  level:0 },
+    { id:'hammer',  name:'Молот кузнеца',       desc:'+70 золото за клик',   icon:'🔨', baseCost:48000,   costMul:1.19, add:70,  level:0 },
+    { id:'crown',   name:'Корона древних',      desc:'+200 золото за клик',  icon:'👑', baseCost:350000,  costMul:1.20, add:200, level:0 },
+  ];
+
+  // Пассивный доход (в секунду)
+  const passiveUpgrades = [
+    { id:'apprentice', name:'Подмастерье',      desc:'+1 золото в секунду',  icon:'🧑‍🌾', baseCost:50,     costMul:1.14, add:1,   level:0 },
+    { id:'miner',      name:'Рудокоп',          desc:'+4 золото в секунду',  icon:'⛏️', baseCost:400,    costMul:1.15, add:4,   level:0 },
+    { id:'alchemist',  name:'Алхимик',          desc:'+12 золото в секунду', icon:'⚗️', baseCost:2800,   costMul:1.16, add:12,  level:0 },
+    { id:'dragon',     name:'Дракон-хранитель', desc:'+40 золото в секунду', icon:'🐉', baseCost:20000,  costMul:1.17, add:40,  level:0 },
+    { id:'guild',      name:'Гильдия торговцев', desc:'+120 золото в секунду', icon:'🏛️', baseCost:150000, costMul:1.18, add:120, level:0 },
+    { id:'vault',      name:'Подземное хранилище', desc:'+350 золото в секунду', icon:'🏦', baseCost:1100000, costMul:1.19, add:350, level:0 },
+  ];
+
+  // Артефакты силы: процентные множители, ограниченное число уровней, сохраняются при перерождении
+  const multiplierUpgrades = [
+    { id:'amulet',  name:'Амулет изобилия',   desc:'+10% ко всему доходу за уровень', icon:'🧿', baseCost:5000,    costMul:2.2, mul:0.10, level:0, maxLevel:10 },
+    { id:'compass', name:'Компас старателя',  desc:'+15% ко всему доходу за уровень', icon:'🧭', baseCost:80000,   costMul:2.4, mul:0.15, level:0, maxLevel:8 },
+    { id:'crownjewel', name:'Коронный самоцвет', desc:'+25% ко всему доходу за уровень', icon:'💎', baseCost:2000000, costMul:2.6, mul:0.25, level:0, maxLevel:6 },
+  ];
+
+  const fmt = (n) => {
+    n = Math.floor(n);
+    if(n < 1000) return String(n);
+    const units = ['K','M','B','T','Q','Qi','Sx'];
+    let u = -1;
+    let v = n;
+    while(v >= 1000 && u < units.length-1){ v/=1000; u++; }
+    return v.toFixed(v < 10 ? 2 : 1) + units[u];
+  };
+
+  const costOf = (u) => Math.ceil(u.baseCost * Math.pow(u.costMul, u.level));
+
+  function prestigeMultiplier(){
+    return 1 + state.prestige * 0.1;
+  }
+
+  function artifactMultiplier(){
+    return multiplierUpgrades.reduce((m,u)=> m + u.mul*u.level, 1);
+  }
+
+  function rebirthCost(){
+    return Math.floor(100000 * Math.pow(8, state.prestige));
+  }
+
+  function recalc(){
+    const flatClick = 1 + clickUpgrades.reduce((s,u)=>s+u.add*u.level,0);
+    const flatPassive = passiveUpgrades.reduce((s,u)=>s+u.add*u.level,0);
+    const mult = prestigeMultiplier() * artifactMultiplier();
+    state.perClick = flatClick * mult;
+    state.perSecond = flatPassive * mult;
+  }
+
+  function render(){
+    document.getElementById('balance').textContent = fmt(state.balance);
+    document.getElementById('perClick').textContent = fmt(state.perClick);
+    document.getElementById('perSecond').textContent = fmt(state.perSecond);
+    document.getElementById('totalEarned').textContent = fmt(state.totalEarned);
+    document.getElementById('prestigeCount').textContent = state.prestige;
+    document.getElementById('prestigeMult').textContent = '×' + prestigeMultiplier().toFixed(2);
+
+    renderList('clickUpgrades', clickUpgrades, false);
+    renderList('passiveUpgrades', passiveUpgrades, false);
+    renderList('multiplierUpgrades', multiplierUpgrades, true);
+
+    const need = rebirthCost();
+    const reqEl = document.getElementById('rebirthReq');
+    reqEl.textContent = 'нужно ' + fmt(need) + ' золота';
+    const pct = Math.max(0, Math.min(100, (state.balance / need) * 100));
+    document.getElementById('prestigeBar').style.width = pct + '%';
+    document.getElementById('rebirthBtn').disabled = state.balance < need;
+  }
+
+  function renderList(containerId, list, isMultiplier){
+    const el = document.getElementById(containerId);
+    el.innerHTML = '';
+    list.forEach(u=>{
+      const maxed = isMultiplier && u.level >= u.maxLevel;
+      const cost = costOf(u);
+      const row = document.createElement('div');
+      row.className = 'upgrade' + (maxed ? ' maxed' : '');
+      const levelText = isMultiplier ? `Уровень ${u.level} / ${u.maxLevel}` : `Уровень ${u.level}`;
+      const btnLabel = maxed ? 'Макс.' : fmt(cost) + ' 🪙';
+      row.innerHTML = `
+        <div class="icon">${u.icon}</div>
+        <div class="info">
+          <div class="name">${u.name}</div>
+          <div class="desc">${u.desc}</div>
+          <div class="level">${levelText}</div>
+        </div>
+        <button ${(maxed || state.balance < cost) ? 'disabled' : ''}>${btnLabel}</button>
+      `;
+      if(!maxed){
+        row.querySelector('button').addEventListener('click', ()=> buy(u, isMultiplier));
+      }
+      el.appendChild(row);
+    });
+  }
+
+  function buy(u, isMultiplier){
+    if(isMultiplier && u.level >= u.maxLevel) return;
+    const cost = costOf(u);
+    if(state.balance < cost) return;
+    state.balance -= cost;
+    u.level += 1;
+    recalc();
+    render();
+    queueSave();
+  }
+
+  function spawnFloat(x, y, amount){
+    const stage = document.getElementById('coinStage');
+    const f = document.createElement('div');
+    f.className = 'float';
+    f.textContent = '+' + fmt(amount);
+    f.style.left = x + 'px';
+    f.style.top = y + 'px';
+    stage.appendChild(f);
+    setTimeout(()=> f.remove(), 900);
+  }
+
+  const coin = document.getElementById('coin');
+  const coinStage = document.getElementById('coinStage');
+
+  coin.addEventListener('click', (e)=>{
+    state.balance += state.perClick;
+    state.totalEarned += state.perClick;
+    const rect = coin.getBoundingClientRect();
+    const stageRect = coinStage.getBoundingClientRect();
+    const x = (e.clientX - stageRect.left) || (rect.width/2 + rect.left - stageRect.left);
+    const y = (e.clientY - stageRect.top) || (rect.height/2);
+    spawnFloat(x, y, state.perClick);
+    coinStage.classList.remove('pop');
+    void coinStage.offsetWidth;
+    coinStage.classList.add('pop');
+    if(tg && tg.HapticFeedback){ try{ tg.HapticFeedback.impactOccurred('light'); }catch(e){} }
+    render();
+    queueSave();
+  });
+
+  // Пассивный доход тикает каждую секунду
+  setInterval(()=>{
+    if(state.perSecond > 0){
+      state.balance += state.perSecond;
+      state.totalEarned += state.perSecond;
+      render();
+    }
+  }, 1000);
+
+  // Автосохранение каждые 5 секунд, даже без изменений
+  setInterval(()=>{ saveNow(); }, 5000);
+
+  document.getElementById('rebirthBtn').addEventListener('click', ()=>{
+    const need = rebirthCost();
+    if(state.balance < need) return;
+    const doRebirth = () => {
+      state.prestige += 1;
+      state.balance = 0;
+      clickUpgrades.forEach(u=> u.level = 0);
+      passiveUpgrades.forEach(u=> u.level = 0);
+      // multiplierUpgrades (артефакты) сохраняются навсегда
+      recalc();
+      render();
+      saveNow();
+    };
+    if(tg && tg.showConfirm){
+      tg.showConfirm('Переродиться? Золото и обычные улучшения обнулятся, но доход навсегда вырастет на 10%.', (ok)=>{
+        if(ok) doRebirth();
+      });
+    } else if(confirm('Переродиться? Золото и обычные улучшения обнулятся, но доход навсегда вырастет на 10%.')){
+      doRebirth();
+    }
+  });
+
+  // ---------- Сохранение / загрузка прогресса ----------
+  let saveTimer = null;
+  function queueSave(){
+    if(saveTimer) return;
+    saveTimer = setTimeout(()=>{ saveTimer = null; saveNow(); }, 800);
+  }
+
+  function serialize(){
+    return JSON.stringify({
+      v: 2,
+      balance: state.balance,
+      totalEarned: state.totalEarned,
+      prestige: state.prestige,
+      click: clickUpgrades.map(u=>u.level),
+      passive: passiveUpgrades.map(u=>u.level),
+      mult: multiplierUpgrades.map(u=>u.level),
+    });
+  }
+
+  function applyLoaded(data){
+    if(!data) return;
+    try{
+      state.balance = data.balance || 0;
+      state.totalEarned = data.totalEarned || 0;
+      state.prestige = data.prestige || 0;
+      if(Array.isArray(data.click)) data.click.forEach((lv,i)=>{ if(clickUpgrades[i]) clickUpgrades[i].level = lv; });
+      if(Array.isArray(data.passive)) data.passive.forEach((lv,i)=>{ if(passiveUpgrades[i]) passiveUpgrades[i].level = lv; });
+      if(Array.isArray(data.mult)) data.mult.forEach((lv,i)=>{ if(multiplierUpgrades[i]) multiplierUpgrades[i].level = lv; });
+    }catch(e){ /* ignore corrupt save */ }
+  }
+
+  function flashSaveHint(text){
+    const el = document.getElementById('saveHint');
+    el.textContent = text;
+    el.style.opacity = '1';
+    setTimeout(()=>{ el.style.opacity = '0'; }, 1200);
+  }
+
+  function saveNow(){
+    const payload = serialize();
+    try{ localStorage.setItem(SAVE_KEY, payload); }catch(e){}
+    if(tg && tg.CloudStorage && tg.CloudStorage.setItem){
+      try{
+        tg.CloudStorage.setItem(SAVE_KEY, payload, (err)=>{
+          if(!err) flashSaveHint('сохранено в облако');
+        });
+      }catch(e){}
+    }
+  }
+
+  function loadAndStart(){
+    // Сначала пробуем локальное хранилище вкладки, чтобы стартовать без задержки
+    let localData = null;
+    try{
+      const raw = localStorage.getItem(SAVE_KEY);
+      if(raw) localData = JSON.parse(raw);
+    }catch(e){}
+    if(localData) applyLoaded(localData);
+
+    if(tg && tg.CloudStorage && tg.CloudStorage.getItem){
+      try{
+        tg.CloudStorage.getItem(SAVE_KEY, (err, value)=>{
+          if(!err && value){
+            try{ applyLoaded(JSON.parse(value)); }catch(e){}
+          }
+          recalc();
+          render();
+        });
+        return;
+      }catch(e){}
+    }
+    recalc();
+    render();
+  }
+
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'hidden') saveNow();
+  });
+  window.addEventListener('pagehide', saveNow);
+  window.addEventListener('beforeunload', saveNow);
+  if(tg && tg.onEvent){
+    try{ tg.onEvent('viewportChanged', ()=> saveNow()); }catch(e){}
+  }
+
+  loadAndStart();
+})();
+</script>
+
+</body>
+</html>
